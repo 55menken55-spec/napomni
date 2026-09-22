@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Авто-бэкап в Google отключён: данные не покидают устройство (см. ТЗ, п.7). -->
+<full-backup-content>
+    <exclude domain="root" path="." />
+</full-backup-content>

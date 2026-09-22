@@ -1,0 +1,16 @@
+# Gradle
+.gradle/
+build/
+app/build/
+
+# Локальные настройки SDK (свой путь у каждого)
+local.properties
+
+# IDE
+.idea/
+*.iml
+captures/
+.DS_Store
+
+# Кеши и служебное
+*.log
