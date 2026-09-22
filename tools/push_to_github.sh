@@ -35,8 +35,8 @@ echo "Создание репозитория: HTTP $CODE (201=создан, 422
 # 2) Залить код. Токен — только в URL этого вызова; в remote не сохраняется.
 git remote remove origin 2>/dev/null || true
 git remote add origin "https://github.com/${USER_NAME}/napomni.git"
-git push -u origin main --tags "https://x-access-token:${TOKEN}@github.com/${USER_NAME}/napomni.git"
-git remote set-url origin "https://github.com/${USER_NAME}/napomni.git"
+git push "https://x-access-token:${TOKEN}@github.com/${USER_NAME}/napomni.git" main --tags
+git branch --set-upstream-to=origin/main main 2>/dev/null || true
 rm -f /tmp/gh_create.json
 echo "Готово: https://github.com/${USER_NAME}/napomni"
 echo "Не забудьте отозвать токен: GitHub → Settings → Developer settings → Tokens"
