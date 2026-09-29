@@ -21,6 +21,8 @@ class RescheduleManager(
 ) {
 
     suspend fun rescheduleAll() {
+        // Страховка от «сиротских» будильников версии 1.1 (напоминание сохранялось с id = 0).
+        alarmScheduler.cancelOrphanAlarm()
         val reminders = reminderRepository.observeAll().first()
         val now = LocalDateTime.now()
         for (reminder in reminders) {

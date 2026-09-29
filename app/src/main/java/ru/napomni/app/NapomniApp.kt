@@ -38,12 +38,18 @@ class AppContainer(context: Context) {
     )
     val settingsRepository = SettingsRepository(context.applicationContext)
 
-    val backupManager by lazy {
-        ru.napomni.app.domain.backup.BackupManager(database, settingsRepository)
-    }
     val notificationHelper = NotificationHelper(context.applicationContext)
     val alarmScheduler = AlarmScheduler(context.applicationContext, database)
     val rescheduleManager = RescheduleManager(database, reminderRepository, alarmScheduler)
+
+    val backupManager by lazy {
+        ru.napomni.app.domain.backup.BackupManager(
+            database,
+            settingsRepository,
+            alarmScheduler,
+            rescheduleManager,
+        )
+    }
 
     val occurrenceActions = OccurrenceActions(database, alarmScheduler, notificationHelper).apply {
         settingsPresets = { settingsRepository.snoozePresets.first() }

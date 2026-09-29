@@ -1,5 +1,10 @@
 package ru.napomni.app.ui.reminders
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -44,6 +49,8 @@ import ru.napomni.app.data.model.EndMode
 import ru.napomni.app.data.model.ReminderImportance
 import ru.napomni.app.data.model.ScheduleType
 import ru.napomni.app.domain.formatTime
+import ru.napomni.app.domain.PermissionChecks
+import ru.napomni.app.domain.PermissionKind
 import ru.napomni.app.ui.AppViewModelProvider
 import ru.napomni.app.ui.categories.CategoriesViewModel
 import ru.napomni.app.ui.components.AppTimePickerDialog
@@ -71,8 +78,36 @@ fun ReminderEditScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val categories by categoriesViewModel.categories.collectAsState()
+    val context = LocalContext.current
     var showDelete by remember { mutableStateOf(false) }
     var showCategoryCreate by remember { mutableStateOf(false) }
+
+    // Напоминание можно сохранить и без разрешения на уведомления, но показывать его
+    // телефон не будет — предупреждаем сразу, а не «тишиной» в назначенное время.
+    var showNotificationsOff by remember { mutableStateOf(false) }
+    var afterSave by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    val notificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        showNotificationsOff = false
+        if (!granted) {
+            PermissionChecks.openSettings(context, PermissionKind.NOTIFICATIONS)
+        }
+        afterSave?.invoke()
+        afterSave = null
+    }
+
+    fun saveReminder() {
+        viewModel.save {
+            if (PermissionChecks.notificationsAllowed(context)) {
+                onDone()
+            } else {
+                afterSave = onDone
+                showNotificationsOff = true
+            }
+        }
+    }
 
     Scaffold(
         modifier = modifier,
@@ -85,7 +120,7 @@ fun ReminderEditScreen(
                     }
                 },
                 actions = {
-                    TextButton(onClick = { viewModel.save(onDone) }) {
+                    TextButton(onClick = { saveReminder() }) {
                         Text("Сохранить")
                     }
                 },
@@ -309,7 +344,7 @@ fun ReminderEditScreen(
 
             Spacer(Modifier.height(24.dp))
             Button(
-                onClick = { viewModel.save(onDone) },
+                onClick = { saveReminder() },
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Сохранить")
@@ -325,6 +360,42 @@ fun ReminderEditScreen(
             }
             Spacer(Modifier.height(32.dp))
         }
+    }
+
+    if (showNotificationsOff) {
+        AlertDialog(
+            onDismissRequest = {
+                showNotificationsOff = false
+                afterSave?.invoke()
+                afterSave = null
+            },
+            title = { Text("Уведомления запрещены") },
+            text = {
+                Text(
+                    "Напоминание сохранено, но пока показ уведомлений запрещён, телефон " +
+                        "о нём не сообщит. Разрешить уведомления сейчас?"
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showNotificationsOff = false
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        PermissionChecks.openSettings(context, PermissionKind.NOTIFICATIONS)
+                        afterSave?.invoke()
+                        afterSave = null
+                    }
+                }) { Text("Разрешить") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showNotificationsOff = false
+                    afterSave?.invoke()
+                    afterSave = null
+                }) { Text("Позже") }
+            },
+        )
     }
 
     if (showCategoryCreate) {

@@ -45,6 +45,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.napomni.app.domain.PermissionChecks
+import ru.napomni.app.domain.PermissionKind
 
 /**
  * «Инструкция» — 10 глав простым языком, офлайн (ТЗ: FR-12).
@@ -126,14 +127,13 @@ fun PermissionChecksBlock() {
     var tick by remember { mutableStateOf(0) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val rows = listOf(
-            Triple("Уведомления", PermissionChecks.notificationsAllowed(context), "android.settings.APP_NOTIFICATION_SETTINGS"),
-            Triple("Точные будильники", PermissionChecks.exactAlarmsAllowed(context), "android.settings.REQUEST_SCHEDULE_EXACT_ALARM"),
-            Triple("Поверх экрана блокировки", PermissionChecks.fullScreenAllowed(context), "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION"),
-            Triple("Без ограничений батареи", PermissionChecks.batteryUnrestricted(context), "android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS")
-        )
-        rows.forEach { (label, ok, action) ->
-            PermissionRow(label = label, ok = ok, action = action)
+        // tick в ключе remember: «Проверить снова» перечитывает состояние разрешений.
+        PermissionKind.entries.forEach { kind ->
+            PermissionRow(
+                label = kind.label,
+                ok = remember(tick) { PermissionChecks.allowed(context, kind) },
+                kind = kind,
+            )
         }
         TextButton(onClick = { tick++ }) {
             Text("Проверить снова", style = MaterialTheme.typography.titleSmall)
@@ -141,8 +141,9 @@ fun PermissionChecksBlock() {
     }
 }
 
+/** Строка разрешения с кнопкой «Открыть» — ведёт точно в нужный экран системных настроек. */
 @Composable
-internal fun PermissionRow(label: String, ok: Boolean, action: String) {
+internal fun PermissionRow(label: String, ok: Boolean, kind: PermissionKind) {
     val context = LocalContext.current
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -157,24 +158,9 @@ internal fun PermissionRow(label: String, ok: Boolean, action: String) {
         Spacer(Modifier.width(8.dp))
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         if (!ok) {
-            TextButton(onClick = {
-                runCatching {
-                    context.startActivity(
-                        android.content.Intent(action).apply {
-                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                    )
-                }.onFailure {
-                    runCatching {
-                        context.startActivity(
-                            android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = android.net.Uri.fromParts("package", context.packageName, null)
-                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                        )
-                    }
-                }
-            }) { Text("Открыть") }
+            TextButton(onClick = { PermissionChecks.openSettings(context, kind) }) {
+                Text("Открыть")
+            }
         }
     }
 }

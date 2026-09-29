@@ -75,6 +75,18 @@ class SettingsViewModel(
         viewModelScope.launch { settings.setOnboardingDone(true) }
     }
 
+    /** Тестовое уведомление — быстрая проверка, что разрешение/канал/звук в порядке. */
+    fun showTestNotification() {
+        val shown = notificationHelper.notifyTest()
+        _uiState.value = _uiState.value.copy(
+            message = if (shown) {
+                "Тестовое уведомление показано"
+            } else {
+                "Показ уведомлений запрещён — включите разрешение в настройках"
+            },
+        )
+    }
+
     fun setSnoozePresets(presets: List<Int>) {
         viewModelScope.launch { settings.setSnoozePresets(presets) }
     }

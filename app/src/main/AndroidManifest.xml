@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Диалог «Не ограничивать работу в фоне» (без этого разрешения системный экран не открывается). -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- M3: восстановление будильников после перезагрузки (FR-9.1). -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Приложение полностью без интернета: выкидываем даже сетевые права библиотек. -->
