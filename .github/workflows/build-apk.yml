@@ -1,7 +1,8 @@
 # Сборка APK «Напомни» на GitHub Actions.
 # Триггерится только при изменении этого файла (или вручную), чтобы обычные
 # коммиты не запускали пересборку. Готовые APK и debug.keystore коммитятся
-# обратно в ту же ветку, откуда запущена сборка.
+# обратно в ту же ветку, откуда запущена сборка. При падении сборки в ветку
+# коммитится каталог ci-debug/ с диагностикой (логи недоступны иначе).
 name: build-apk
 
 on:
@@ -16,18 +17,29 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # На образах ubuntu-latest Android SDK уже установлен ($ANDROID_HOME).
+      # Принимаем лицензии и ставим нужные пакеты напрямую, без сторонних actions.
+      - name: Prepare Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          ls "$ANDROID_HOME" || true
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$SDKM" ] || SDKM=$(find "$ANDROID_HOME" -name sdkmanager -type f | head -1)
+          echo "sdkmanager: $SDKM"
+          yes | "$SDKM" --licenses > sdk-licenses.log 2>&1 || true
+          "$SDKM" "platform-tools" "platforms;android-35" "build-tools;35.0.0" > sdk-install.log 2>&1 || true
+          tail -3 sdk-install.log || true
+          "$SDKM" --list_installed 2>/dev/null | grep -E "platforms|build-tools|platform-tools" || true
 
       - name: Ensure stable debug keystore
         run: |
@@ -39,7 +51,9 @@ jobs:
           fi
 
       - name: Build and test (v1.1.1)
-        run: ./gradlew --no-daemon --stacktrace test assembleDebug assembleRelease
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon --stacktrace test assembleDebug assembleRelease 2>&1 | tee build-output.log
 
       - name: Test summary
         if: always()
@@ -64,3 +78,23 @@ jobs:
           git add app-debug-v1.1.1.apk app-release-v1.1.1.apk debug.keystore
           git commit -m "Сборка v1.1.1: APK (debug и release) и debug.keystore [skip ci]"
           git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      # Логи Actions недоступны из песочницы, поэтому при падении кладём
+      # диагностику прямо в ветку.
+      - name: Commit diagnostics on failure
+        if: failure()
+        run: |
+          mkdir -p ci-debug
+          { echo "ANDROID_HOME=$ANDROID_HOME"; echo "runner=$(uname -a)"; } > ci-debug/env.txt
+          ls -la "$ANDROID_HOME" >> ci-debug/env.txt 2>&1 || true
+          cp sdk-licenses.log sdk-install.log build-output.log ci-debug/ 2>/dev/null || true
+          tail -100 build-output.log > ci-debug/gradle-tail.log 2>/dev/null || true
+          if [ -d app/build/test-results ]; then
+            mkdir -p ci-debug/test-results
+            cp -r app/build/test-results/. ci-debug/test-results/ 2>/dev/null || true
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f ci-debug
+          git commit -m "CI: диагностика упавшей сборки [skip ci]" || echo "nothing to commit"
+          git push origin "HEAD:${GITHUB_REF_NAME}" || true
