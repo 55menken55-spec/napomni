@@ -10,6 +10,15 @@ android {
     namespace = "ru.napomni.app"
     compileSdk = 35
 
+    signingConfigs {
+        getByName("debug") {
+            // Стабильный отладочный ключ из корня репозитория (debug.keystore):
+            // обновления ставятся поверх предыдущих сборок без удаления данных.
+            // Если файла нет — используется стандартный ~/.android/debug.keystore.
+            rootProject.file("debug.keystore").takeIf { it.exists() }?.let { storeFile = it }
+        }
+    }
+
     defaultConfig {
         applicationId = "ru.napomni.app"
         minSdk = 26
