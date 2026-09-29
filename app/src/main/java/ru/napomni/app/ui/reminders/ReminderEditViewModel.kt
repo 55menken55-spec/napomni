@@ -140,8 +140,13 @@ class ReminderEditViewModel(
                 createdAt = existing?.createdAt ?: now,
                 updatedAt = now,
             )
-            repository.upsert(reminder)
-            alarmScheduler.scheduleNext(reminder)
+            // id новой записи известен только после вставки в БД. Раньше будильник ставился
+            // по объекту с id = 0 — приёмник отбрасывал такое срабатывание, и уведомление
+            // не приходило (главный баг v1.1). Планируем строго по сохранённой записи.
+            val savedId = repository.upsert(reminder)
+            val saved = repository.get(savedId) ?: reminder.copy(id = savedId)
+            _state.update { it.copy(id = savedId) }
+            alarmScheduler.scheduleNext(saved)
             onDone()
         }
     }

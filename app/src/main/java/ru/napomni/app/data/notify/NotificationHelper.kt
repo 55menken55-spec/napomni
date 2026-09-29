@@ -13,6 +13,7 @@ import android.net.Uri
 import androidx.core.app.NotificationCompat
 import ru.napomni.app.R
 import ru.napomni.app.data.model.Reminder
+import ru.napomni.app.domain.PermissionChecks
 import ru.napomni.app.receiver.NotificationActionReceiver
 import ru.napomni.app.ui.action.ReminderActionActivity
 
@@ -135,6 +136,25 @@ class NotificationHelper(private val context: Context) {
         uri?.takeIf { it.isNotBlank() }?.let(Uri::parse)
     }.getOrNull()
 
+    /**
+     * Тестовое уведомление: быстрая диагностика, когда «напоминание не приходит».
+     * Показывает, что разрешение выдано и канал работает. false — показ запрещён системой.
+     */
+    fun notifyTest(): Boolean {
+        if (!PermissionChecks.notificationsAllowed(context)) return false
+        ensureChannels()
+        val notification = NotificationCompat.Builder(context, CH_REMINDERS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("Проверка уведомлений")
+            .setContentText("Если вы это видите и слышите — напоминания будут приходить.")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setAutoCancel(true)
+            .build()
+        notify(TEST_NOTIFICATION_ID, notification)
+        return true
+    }
+
     fun notify(occurrenceId: Long, notification: Notification) {
         notificationManager.notify(occurrenceId.toInt(), notification)
     }
@@ -174,6 +194,9 @@ class NotificationHelper(private val context: Context) {
             .build()
 
     companion object {
+        /** id тестового уведомления из «Настройки» → «Проверка уведомлений». */
+        const val TEST_NOTIFICATION_ID = -777L
+
         const val CH_REMINDERS = "reminders"
         const val CH_ALARMS = "alarms"
         const val CH_MISSED = "missed"

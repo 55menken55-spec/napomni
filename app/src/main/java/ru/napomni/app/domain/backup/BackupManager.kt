@@ -1,6 +1,8 @@
 package ru.napomni.app.domain.backup
 
 import androidx.room.withTransaction
+import ru.napomni.app.data.alarm.AlarmScheduler
+import ru.napomni.app.data.alarm.RescheduleManager
 import ru.napomni.app.data.db.NapomniDatabase
 import ru.napomni.app.data.settings.SettingsRepository
 import ru.napomni.app.data.model.ThemeMode
@@ -13,6 +15,8 @@ import kotlinx.coroutines.flow.first
 class BackupManager(
     private val database: NapomniDatabase,
     private val settings: SettingsRepository,
+    private val alarmScheduler: AlarmScheduler,
+    private val rescheduleManager: RescheduleManager,
 ) {
 
     suspend fun exportToJson(): String = with(BackupMapper) {
@@ -40,6 +44,8 @@ class BackupManager(
         require(file.schemaVersion <= BACKUP_SCHEMA_VERSION) {
             "Неподдерживаемая версия файла: ${file.schemaVersion}"
         }
+        // Снимаем будильники прежних напоминаний: их записи сейчас будут заменены.
+        database.reminderDao().getAll().forEach { alarmScheduler.cancelReminder(it.id) }
         with(BackupMapper) {
             database.withTransaction {
                 // Полная замена (FR-10.3).
@@ -63,5 +69,8 @@ class BackupManager(
             settings.setSoundNotifications(file.settings.soundNotificationsUri)
             settings.setSoundAlarm(file.settings.soundAlarmUri)
         }
+        // Будильники восстановленных напоминаний. Без этого уведомления не приходили бы
+        // до следующего запуска приложения / перезагрузки (баг v1.1).
+        rescheduleManager.rescheduleAll()
     }
 }

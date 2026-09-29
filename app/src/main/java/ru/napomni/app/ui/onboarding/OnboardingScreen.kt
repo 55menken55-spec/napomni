@@ -1,12 +1,7 @@
 package ru.napomni.app.ui.onboarding
 
 import android.Manifest
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
-import android.os.PowerManager
-import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import ru.napomni.app.domain.PermissionChecks
+import ru.napomni.app.domain.PermissionKind
 
 /**
  * Экран разрешений при первом запуске (ТЗ: FR-9.4).
@@ -91,47 +87,36 @@ fun OnboardingScreen(onDone: () -> Unit) {
             Card(shape = RoundedCornerShape(14.dp), colors = CardDefaults.cardColors()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     PermissionRow2(
-                        title = "Уведомления",
+                        title = PermissionKind.NOTIFICATIONS.label,
                         subtitle = "Напоминания будут показываться на экране",
                         ok = PermissionChecks.notificationsAllowed(context)
                     ) {
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            PermissionChecks.openSettings(context, PermissionKind.NOTIFICATIONS)
                         }
                     }
                     PermissionRow2(
-                        title = "Точные будильники",
+                        title = PermissionKind.EXACT_ALARMS.label,
                         subtitle = "Срабатывание точно в назначенное время",
                         ok = PermissionChecks.exactAlarmsAllowed(context)
                     ) {
-                        openSettings(
-                            context,
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM
-                            } else Settings.ACTION_APPLICATION_DETAILS_SETTINGS
-                        )
+                        PermissionChecks.openSettings(context, PermissionKind.EXACT_ALARMS)
                     }
                     PermissionRow2(
-                        title = "Поверх экрана блокировки",
+                        title = PermissionKind.FULL_SCREEN.label,
                         subtitle = "Важные «будильники» видны всегда",
                         ok = PermissionChecks.fullScreenAllowed(context)
                     ) {
-                        openSettings(context, Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        PermissionChecks.openSettings(context, PermissionKind.FULL_SCREEN)
                     }
                     PermissionRow2(
-                        title = "Без ограничений батареи",
+                        title = PermissionKind.BATTERY.label,
                         subtitle = "Телефон не «усыпит» приложение (важно для Xiaomi и подобных)",
                         ok = PermissionChecks.batteryUnrestricted(context)
                     ) {
-                        runCatching {
-                            val intent = Intent(
-                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                                Uri.parse("package:${context.packageName}")
-                            ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            context.startActivity(intent)
-                        }.onFailure {
-                            openSettings(context, Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                        }
+                        PermissionChecks.openSettings(context, PermissionKind.BATTERY)
                     }
                 }
             }
@@ -184,17 +169,3 @@ private fun PermissionRow2(title: String, subtitle: String, ok: Boolean, onFix: 
     }
 }
 
-private fun openSettings(context: Context, action: String) {
-    runCatching {
-        context.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    }.onFailure {
-        runCatching {
-            context.startActivity(
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                    data = Uri.fromParts("package", context.packageName, null)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-            )
-        }
-    }
-}

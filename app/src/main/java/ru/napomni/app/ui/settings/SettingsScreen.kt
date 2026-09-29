@@ -99,15 +99,20 @@ fun SettingsScreen(
         }
     }
 
+    // Куда вернуть выбранный звук: системный пикер не отдаёт обратно наши extras,
+    // поэтому цель запоминаем сами (в v1.1 выбор звука из-за этого терялся).
+    var soundTarget by remember { mutableStateOf<String?>(null) }
+
     val soundLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val uri: Uri? = result.data?.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
         val value = uri?.toString()
-        when (result.data?.getStringExtra(EXTRA_SOUND_TARGET)) {
+        when (soundTarget) {
             "notifications" -> viewModel.setSoundNotifications(value)
             "alarm" -> viewModel.setSoundAlarm(value)
         }
+        soundTarget = null
     }
 
     LaunchedEffect(uiState.message) {
@@ -154,7 +159,8 @@ fun SettingsScreen(
                     label = "Звук уведомлений",
                     value = uiState.soundNotificationsUri,
                     onPick = {
-                        soundLauncher.launch(ringtoneIntent("notifications", uiState.soundNotificationsUri))
+                        soundTarget = "notifications"
+                        soundLauncher.launch(ringtoneIntent(uiState.soundNotificationsUri))
                     },
                     onReset = { viewModel.setSoundNotifications(null) }
                 )
@@ -162,7 +168,8 @@ fun SettingsScreen(
                     label = "Звук «будильника»",
                     value = uiState.soundAlarmUri,
                     onPick = {
-                        soundLauncher.launch(ringtoneIntent("alarm", uiState.soundAlarmUri))
+                        soundTarget = "alarm"
+                        soundLauncher.launch(ringtoneIntent(uiState.soundAlarmUri))
                     },
                     onReset = { viewModel.setSoundAlarm(null) }
                 )
@@ -181,6 +188,19 @@ fun SettingsScreen(
                 )
                 Spacer(Modifier.height(8.dp))
                 PermissionChecksBlock()
+            }
+
+            SettingsCard("Проверка уведомлений") {
+                Text(
+                    "Если напоминание не приходит — нажмите кнопку: появится тестовое уведомление. " +
+                        "Нет ни плашки, ни звука — значит дело в разрешении, канале или режиме " +
+                        "«Не беспокоить».",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = { viewModel.showTestNotification() }) {
+                    Text("Показать тестовое уведомление")
+                }
             }
 
             SettingsCard("Кнопки «Отложить»") {
@@ -270,16 +290,16 @@ fun SettingsScreen(
     }
 }
 
-private const val EXTRA_SOUND_TARGET = "sound_target"
-
-private fun ringtoneIntent(target: String, current: String?): Intent =
+private fun ringtoneIntent(current: String?): Intent =
     Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
         putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
         putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
         putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
         putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Выберите звук")
-        putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, current?.let(Uri::parse))
-        putExtra(EXTRA_SOUND_TARGET, target)
+        putExtra(
+            RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+            current?.takeIf { it.isNotBlank() }?.let(Uri::parse),
+        )
     }
 
 @Composable

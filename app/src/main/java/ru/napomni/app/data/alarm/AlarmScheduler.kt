@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import ru.napomni.app.data.db.NapomniDatabase
 import ru.napomni.app.data.model.Reminder
 import ru.napomni.app.data.model.ReminderImportance
@@ -34,6 +35,13 @@ class AlarmScheduler(
     suspend fun scheduleNext(reminder: Reminder) {
         cancelRegular(reminder.id)
         if (!reminder.enabled) return
+        // Напоминание, которого ещё нет в БД (id = 0), ставить нельзя: приёмник отбросит
+        // такое срабатывание (см. AlarmReceiver) и уведомление не покажется. Это был
+        // главный баг v1.1 — «напоминание сохраняется, а уведомление не приходит».
+        if (reminder.id <= 0L) {
+            Log.e(TAG, "scheduleNext: у напоминания нет id в БД — будильник не поставлен")
+            return
+        }
         val next = ScheduleCalculator.nextOccurrenceAfter(reminder, LocalDateTime.now()) ?: return
         schedule(
             reminderId = reminder.id,
@@ -43,6 +51,15 @@ class AlarmScheduler(
             kind = KIND_REGULAR,
             requestCode = regularCode(reminder.id),
         )
+    }
+
+    /**
+     * Снимает «пустой» регулярный будильник, поставленный версией 1.1 при создании
+     * напоминания (когда будильник планировался ещё до записи в БД, с id = 0).
+     * Такой будильник срабатывает и молча ничего не делает — его нужно убрать.
+     */
+    fun cancelOrphanAlarm() {
+        alarmManager.cancel(pendingBroadcast(regularCode(0L)))
     }
 
     /** Ставит отложенное срабатывание (ТЗ, FR-4.3). */
@@ -108,6 +125,10 @@ class AlarmScheduler(
         kind: String,
         requestCode: Int,
     ) {
+        if (reminderId <= 0L) {
+            Log.e(TAG, "schedule($kind): пропуск — напоминание без id в БД")
+            return
+        }
         val triggerAtMillis = triggerAt.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         if (triggerAtMillis <= System.currentTimeMillis()) return
 
@@ -176,6 +197,8 @@ class AlarmScheduler(
     )
 
     companion object {
+        private const val TAG = "AlarmScheduler"
+
         const val ACTION_FIRE = "ru.napomni.app.action.FIRE"
         const val EXTRA_REMINDER_ID = "reminder_id"
         const val EXTRA_OCCURRENCE_ID = "occurrence_id"
